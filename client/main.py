@@ -2,12 +2,13 @@ import math
 import os
 from pathlib import Path
 import webbrowser
+from uuid import uuid4
 
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 import pygame
 
-from client.scores import load_scores, save_score
+from client.api_client import ScoreClient
 from client.progress import clear_progress, load_progress, save_progress
 from client.leaderboard import start_server
 from client.art import TowerArt
@@ -74,6 +75,7 @@ class App:
         self.progress_ok = True
         self.autosave_timer = 0
         self.run_name = ""
+        self.run_id = None
         self.checkpoint = load_progress()
         if self.checkpoint:
             self.name = self.checkpoint["name"]
@@ -86,7 +88,9 @@ class App:
             self.leaderboard_server = start_server()
         except OSError:
             self.notice = "Leaderboard could not start. Try opening it again."
-        self.scores = load_scores()
+        self.score_client = ScoreClient(self.leaderboard_server.url if self.leaderboard_server
+                                        else "http://127.0.0.1:8000/")
+        self.scores = self.score_client.fetch_scores()
         self.buttons = []
         self.mouse = (0, 0)
         self.running = True
@@ -138,6 +142,7 @@ class App:
     def start_game(self):
         self.name = " ".join(self.name.split()) or "Player"
         self.run_name = self.name
+        self.run_id = str(uuid4())
         self.game = Game(self.difficulty, map_name=self.map_name)
         self.page = "game"
         self.selected = None
@@ -155,6 +160,7 @@ class App:
         if not self.checkpoint:
             return
         self.name = self.run_name = self.checkpoint["name"]
+        self.run_id = str(uuid4())
         self.game = self.checkpoint["game"]
         self.difficulty = self.game.difficulty
         self.map_name = self.game.map_name
@@ -182,6 +188,7 @@ class App:
         try:
             if self.leaderboard_server is None:
                 self.leaderboard_server = start_server()
+                self.score_client = ScoreClient(self.leaderboard_server.url)
             if not webbrowser.open(self.leaderboard_server.url):
                 self.notice = f"Open {self.leaderboard_server.url} in your browser."
         except (OSError, webbrowser.Error):
@@ -193,7 +200,7 @@ class App:
         self.page = "menu"
         self.paused = False
         self.typing = False
-        self.scores = load_scores()
+        self.scores = self.score_client.fetch_scores()
 
     def set_difficulty(self, value):
         self.difficulty = value
@@ -234,6 +241,8 @@ class App:
     def show_page(self, page):
         self.page = page
         self.typing = False
+        if page == "records":
+            self.scores = self.score_client.fetch_scores()
 
     def cancel(self):
         self.building = False
@@ -258,8 +267,11 @@ class App:
                     self.name = self.name[:-1]
                 elif event.key == pygame.K_RETURN:
                     self.start_game()
-            elif self.page == "game" and self.game.state not in ("win", "lose"):
-                if event.key == pygame.K_p:
+            elif self.page == "game":
+                if self.game.state in ("win", "lose"):
+                    if event.key == pygame.K_r:
+                        self.start_game()
+                elif event.key == pygame.K_p:
                     self.paused = not self.paused
                 elif not self.paused and event.key == pygame.K_SPACE:
                     self.start_wave()
@@ -557,13 +569,13 @@ class App:
         for x, label, value in ((390, "FINAL SCORE", self.game.score), (590, "WAVES CLEARED", f"{self.game.completed_waves}/9"), (790, "BASE LIVES", self.game.lives)):
             self.text(label, (x, 369), 16, MUTED, True)
             self.text(value, (x, 416), 36, GREEN, True)
-        self.text("Record saved locally." if self.save_ok else "Could not save the record. Check folder permissions.", (590, 476), 18, MUTED if self.save_ok else RED, True)
-        self.button((355, 531, 220, 50), "Play again", self.start_game, True)
+        self.text("Score saved on server." if self.save_ok else "Server unavailable. This result was not saved.", (590, 476), 18, MUTED if self.save_ok else RED, True)
+        self.button((355, 531, 220, 50), "Play again / R", self.start_game, True)
         self.button((605, 531, 220, 50), "Main menu", self.menu)
 
     def draw_records(self):
         self.text("LOCAL RECORDS", (90, 60), 36, GOLD)
-        self.text("Your best runs, saved on this computer.", (90, 117), 20, MUTED)
+        self.text("Your best runs from the local server.", (90, 117), 20, MUTED)
         for i, difficulty in enumerate(("easy", "normal", "hard")):
             self.button((90 + i * 147, 167, 136, 43), difficulty.title(), lambda d=difficulty: self.set_difficulty(d), self.difficulty == difficulty)
         for x, label in ((90, "RANK"), (192, "PLAYER"), (560, "SCORE"), (705, "LEVEL"), (843, "RESULT")):
@@ -629,10 +641,12 @@ class App:
         else:
             self.auto_timer = AUTO_DELAY
         if self.game.state in ("win", "lose") and not self.saved:
-            self.save_ok = save_score(self.run_name, self.game.score, self.game.level,
-                                      self.game.difficulty, self.game.state == "win")
+            self.save_ok = self.score_client.submit_score(
+                self.run_name, self.game.score, self.game.level,
+                self.game.difficulty, self.game.state == "win", self.run_id)
             self.saved = True
-            self.scores = load_scores()
+            if self.save_ok:
+                self.scores = self.score_client.fetch_scores()
             self.progress_ok = clear_progress()
             self.checkpoint = None
         elif self.game.state in ("build", "wave", "choice"):

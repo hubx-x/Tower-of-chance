@@ -15,9 +15,9 @@ python -m venv .venv
 if errorlevel 1 goto setup_error
 
 :dependencies
-".venv\Scripts\python.exe" -c "import pygame; assert 'pygame==' + pygame.version.ver in open('requirements.txt').read().splitlines()" >nul 2>&1
+".venv\Scripts\python.exe" -c "from importlib.metadata import version; from pathlib import Path; assert all(version(name) == expected for name, expected in (line.strip().split('==') for line in Path('requirements.txt').read_text().splitlines() if line.strip()))" >nul 2>&1
 if not errorlevel 1 goto play
-echo Installing Pygame...
+echo Installing game and local server packages...
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt
 if errorlevel 1 goto setup_error
 

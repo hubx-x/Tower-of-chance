@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>How to play · Towers of Chance</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand"><span class="tower" aria-hidden="true">▮</span> TOWERS OF CHANCE</div>
+    <div class="header-links">
+      <nav aria-label="Main navigation"><a href="/">Leaderboard</a><a href="/static/rules.html" aria-current="page">How to play</a></nav>
+      <span class="local">Local leaderboard</span>
+    </div>
+  </header>
+  <section class="intro" aria-labelledby="title">
+    <p class="eyebrow">Build. Upgrade. Survive.</p>
+    <h1 id="title">How to play</h1>
+    <p>Defend your base through three levels and nine waves.</p>
+  </section>
+  <div class="rules-grid">
+    <section class="rule">
+      <h2>Protect the base</h2>
+      <p>Choose your name, difficulty and map: Meadow, Desert or Tundra. You start with 20 base lives. Each enemy that reaches the end of the road takes one life. Clear all nine waves to win.</p>
+    </section>
+    <section class="rule">
+      <h2>Build your defense</h2>
+      <p>Select a tower in the shop, then click empty ground to place it. Leave room between towers and keep them off the road. You can build during a wave too.</p>
+    </section>
+    <section class="rule">
+      <h2>Upgrade and merge</h2>
+      <p>Click a placed tower and choose its damage, speed or range path. Upgrades cost 35 coins for level 2 and 65 for level 3. The chosen path stays with that tower.</p>
+      <p>Merge two level 3 towers of the same type and path to make one level 4 tower. Selling returns half of the tower's purchase and upgrade costs.</p>
+    </section>
+    <section class="rule">
+      <h2>Take a chance</h2>
+      <p>After waves 1, 4 and 7 on Easy or Normal, choose one of three chance cards. On Hard, cards appear after waves 1 and 6. Effects stack and last for the rest of the run, including for new towers.</p>
+    </section>
+    <section class="rule">
+      <h2>Earn your score</h2>
+      <p>Each defeated enemy earns 10 points and 10 coins. Clearing a wave adds 50 points and 30 coins; completing a level adds another 100 points and 40 coins.</p>
+      <p>At the end of each run, the game sends its score to the local server. The result screen confirms whether it saved. The leaderboard shows the best 30 completed runs on this computer.</p>
+    </section>
+    <section class="rule">
+      <h2>Pick up where you left off</h2>
+      <p>Your unfinished run saves automatically. Use Continue saved run from the menu to return to it, then resume the paused game.</p>
+      <p>Auto wave starts the next wave after a three-second wait when you have a tower. Choose any pending chance card before continuing.</p>
+    </section>
+  </div>
+  <section class="rules-section" aria-labelledby="towers-title">
+    <h2 id="towers-title">Choose your towers</h2>
+    <div class="scroll rule-table">
+      <table>
+        <caption>Tower purchase costs and abilities</caption>
+        <thead><tr><th scope="col">Tower</th><th scope="col">Cost</th><th scope="col">Ability</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Basic</td><td>50 coins</td><td>Balanced, reliable shots.</td></tr>
+          <tr><td class="name">Ice</td><td>80 coins</td><td>Briefly freezes enemies with each hit.</td></tr>
+          <tr><td class="name">Fire</td><td>90 coins</td><td>Burns enemies for damage over time.</td></tr>
+          <tr><td class="name">Machine gun</td><td>100 coins</td><td>Rapid shots with a shorter range.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section class="rules-section" aria-labelledby="controls-title">
+    <h2 id="controls-title">Controls</h2>
+    <dl class="controls">
+      <dt>Left click</dt><dd>Select a tower, place it, buy an upgrade or choose a chance card.</dd>
+      <dt>Right click</dt><dd>Cancel your current selection.</dd>
+      <dt>Space</dt><dd>Start the next wave.</dd>
+      <dt>1 / 2 / 3</dt><dd>Choose the corresponding chance card.</dd>
+      <dt>P</dt><dd>Pause or resume.</dd>
+      <dt>R</dt><dd>Start a new game after victory or defeat.</dd>
+      <dt>Esc</dt><dd>Save your unfinished run and return to the main menu.</dd>
+    </dl>
+  </section>
+  <footer><span>Ready for another defense?</span><a href="/">View the leaderboard →</a></footer>
+</main>
+</body>
+</html>

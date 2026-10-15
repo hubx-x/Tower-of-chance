@@ -30,6 +30,16 @@ class AppProgressTests(unittest.TestCase):
         server_patch = patch("client.main.start_server", return_value=self.server)
         self.start_server = server_patch.start()
         self.addCleanup(server_patch.stop)
+        self.api_client = Mock()
+        self.api_client.fetch_scores.side_effect = scores.load_scores
+        # The fake server stores only in this test's temporary directory.
+        self.api_client.submit_score.side_effect = (
+            lambda name, score, level, difficulty, won, run_id:
+            scores.save_score(name, score, level, difficulty, won)
+        )
+        client_patch = patch("client.main.ScoreClient", return_value=self.api_client)
+        client_patch.start()
+        self.addCleanup(client_patch.stop)
         self.addCleanup(pygame.quit)
 
     def start_game(self, name="Player One"):
@@ -141,11 +151,15 @@ class AppProgressTests(unittest.TestCase):
         self.assertEqual(records[0]["name"], app.run_name)
         self.assertEqual(records[0]["score"], app.game.score)
         self.assertEqual(records[0]["won"], won)
+        self.api_client.submit_score.assert_called_once_with(
+            app.run_name, app.game.score, app.game.level,
+            app.game.difficulty, won, app.run_id)
         app.update(0.25)
         app.menu()
         app.handle(pygame.event.Event(pygame.QUIT))
         self.assertEqual(scores.load_scores(), records)
         self.assertIsNone(progress.load_progress())
+        self.assertEqual(self.api_client.submit_score.call_count, 1)
 
     def test_victory_saves_one_record_and_removes_checkpoint(self):
         app = self.start_game()
@@ -183,6 +197,43 @@ class AppProgressTests(unittest.TestCase):
         self.server.shutdown.assert_called_once_with()
         self.server.server_close.assert_called_once_with()
         self.assertFalse(pygame.get_init())
+
+    def test_offline_score_submission_does_not_crash_or_repeat(self):
+        self.api_client.submit_score.side_effect = None
+        self.api_client.submit_score.return_value = False
+        app = self.start_game()
+        app.start_wave()
+        app.game.lives = 1
+        app.game._spawn_remaining = 0
+        app.game.enemies = [Enemy(app.game.path_length - 1, 10, 10, 100)]
+        app.update(0.25)
+        self.assertEqual(app.game.state, "lose")
+        self.assertTrue(app.saved)
+        self.assertFalse(app.save_ok)
+        app.update(0.25)
+        app.draw()
+        self.assertEqual(self.api_client.submit_score.call_count, 1)
+        self.assertEqual(scores.load_scores(), [])
+        self.assertIsNone(progress.load_progress())
+
+    def test_restart_key_creates_new_run_and_submits_new_result_once(self):
+        app = self.start_game()
+        first_run_id = app.run_id
+        for iteration in range(2):
+            app.start_wave()
+            app.game.lives = 1
+            app.game._spawn_remaining = 0
+            app.game.enemies = [Enemy(app.game.path_length - 1, 10, 10, 100)]
+            app.update(0.25)
+            app.update(0.25)
+            self.assertEqual(self.api_client.submit_score.call_count, iteration + 1)
+            if iteration == 0:
+                app.handle(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_r))
+                self.assertEqual(app.game.state, "build")
+                self.assertFalse(app.saved)
+                self.assertNotEqual(app.run_id, first_run_id)
+                self.assertIsNotNone(progress.load_progress())
+        self.assertEqual(len(scores.load_scores()), 2)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 scores.json
 scores.tmp
+scores.db
+scores.db-*
+progress.json
 saves/
 *.tmp
 .DS_Store

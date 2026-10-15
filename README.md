@@ -4,13 +4,46 @@
 
 Double-click **run.bat** to play. The game automatically saves your current run every 2 seconds, when a wave changes, and when you return to the menu or close the window. Choose **Continue saved run** to resume with your towers, upgrades, coins, lives, chance cards, and current wave restored. A continued game starts paused; press **P** to play.
 
-There is one saved run on this computer. **New game / Enter** starts a fresh run and replaces it. Finishing a game clears that run and adds its result to the high scores.
+There is one saved run on this computer. **New game / Enter** starts a fresh run and replaces it. Finishing a game clears that run and sends its result to the local server once. The result screen reports whether the server saved it. If the server is unavailable, the game stays playable.
 
-Click **Leaderboard website** in the game to open the HTML leaderboard, normally at **http://127.0.0.1:8765/**. It shows your saved high scores, lets you filter by difficulty, and refreshes every 5 seconds. If that port is busy, the game uses another available local port. The website stays available while the game is running.
+Click **Leaderboard website** in the game to open the HTML leaderboard, normally at **http://127.0.0.1:8000/**. It shows real results from SQLite, lets you filter by difficulty, and refreshes every 5 seconds. If that port is busy, the game uses another available local port. The website stays available while the game is running.
 
-To open the leaderboard without the game, double-click **run_leaderboard.bat**. Keep its window open while using the website; press **Ctrl+C** to stop it. Both launchers use the same local records. No account, database, or extra web packages are needed.
+To open the server without the game, double-click **run_leaderboard.bat**. Keep its window open while using the website; press **Ctrl+C** to stop it. Both launchers use the same database. The game also starts its own local server automatically, so normal play needs just **run.bat**.
 
-Progress and high scores live in `%LOCALAPPDATA%\TowersOfChance\progress.json` and `scores.json`. The website shows completed runs saved on this computer. Python 3.10+ and Pygame are the only game requirements; `run.bat` installs Pygame on first launch.
+Unfinished progress lives in `%LOCALAPPDATA%\TowersOfChance\progress.json`. Completed results live in `%LOCALAPPDATA%\TowersOfChance\scores.db`. Existing results from the older `scores.json` are imported once. The database and personal saves stay out of Git. Python 3.10+ is required; `run.bat` installs Pygame, FastAPI, Uvicorn and Jinja2 on first launch.
+
+## Local server and API
+
+The game sends scores over HTTP to the server. The server writes SQLite and renders the Jinja HTML page; the browser reads scores from the same server.
+
+| Address | Purpose |
+| --- | --- |
+| `http://127.0.0.1:8000/` | Live HTML leaderboard |
+| `http://127.0.0.1:8000/static/rules.html` | Game rules |
+| `http://127.0.0.1:8000/docs` | Interactive API documentation |
+| `POST /scores` | Save a result, HTTP 201 on creation |
+| `GET /scores/top` | Highest scores |
+| `GET /players/{name}/stats` | Player games, best score, average and wins |
+| `GET /api/scores` | Live leaderboard JSON |
+
+Example score body: `{"player":"Player","score":120}`. The game also sends difficulty, level, victory/defeat and a run ID. Repeating the same run ID returns the existing result instead of creating a duplicate. Its HTTP requests time out after 3 seconds.
+
+For separate terminals, run these from the project folder after the first setup:
+
+```powershell
+# Terminal 1: local API and website
+.\.venv\Scripts\python.exe -m client.leaderboard
+# Terminal 2: game
+.\.venv\Scripts\python.exe -m client.main
+```
+
+If both launchers are running, they share `scores.db`. The game opens the exact address of its server through **Leaderboard website**, even if it had to choose a different port.
+
+![Local leaderboard](docs/leaderboard.jpg)
+
+The screenshot shows an automated verification game using an isolated test database. Your own leaderboard starts with your saved results.
+
+Tests: `.\.venv\Scripts\python.exe -m unittest discover -s tests -v`.
 
 Vienkārša 2D torņu aizsardzības spēle Python un Pygame ar pikseļu izskatu. Izvēlies spēlētāja vārdu, grūtību (**Easy**, **Normal** vai **Hard**) un karti (**Meadow**, **Desert** vai **Tundra**). Aizsargā bāzi un pārvari visus 9 viļņus.
 
@@ -22,7 +55,7 @@ Atver šo mapi VS Code. Terminālī izpildi tikai:
 .\run.bat
 ```
 
-Pirmajā reizē skripts pats izveido `.venv` un instalē Pygame. Nākamajās reizēs tas uzreiz atver spēli. Var arī divreiz uzklikšķināt uz `run.bat`.
+Pirmajā reizē skripts pats izveido `.venv` un instalē nepieciešamās bibliotēkas. Nākamajās reizēs tas uzreiz atver spēli un lokālo serveri. Var arī divreiz uzklikšķināt uz `run.bat`.
 
 Nepieciešams Python 3.10 vai jaunāks. VS Code izmanto Python un Python Debugger paplašinājumus; pēc pirmās palaišanas pieejama arī **F5** atkļūdošana un uzdevums **Run Towers of Chance**. Virtuālā vide nav manuāli jāaktivizē.
 
@@ -33,6 +66,7 @@ Nepieciešams Python 3.10 vai jaunāks. VS Code izmanto Python un Python Debugge
 - **Space** — sākt nākamo vilni.
 - **Auto wave** — ieslēgt vai izslēgt automātisku viļņu sākšanu.
 - **P** — pauze vai turpināt.
+- **R** — pēc spēles beigām sākt jaunu spēli.
 - **Esc** — atgriezties galvenajā izvēlnē.
 - **Apvienošana** — izvēlēties divus viena veida 3. līmeņa torņus ar vienādu uzlabojuma ceļu, lai bez maksas izveidotu vienu 4. līmeņa torni.
 - **Sell** — pārdot izvēlēto torni un atgūt pusi tajā ieguldīto monētu, noapaļojot uz leju.
@@ -64,13 +98,16 @@ Easy un Normal piedāvā trīs nejaušas efekta kartītes pēc kopējā 1., 4. u
 
 Par uzvarētu ienaidnieku saņem 10 punktus, par pabeigtu vilni 50 un par pabeigtu līmeni 100. Punkti un monētas ir atsevišķi. Pēc uzvaras vai zaudējuma parādās rezultāta ekrāns; galvenajā izvēlnē pieejama rekordu tabula.
 
-Rekordi tiek saglabāti lokāli `%LOCALAPPDATA%\TowersOfChance\scores.json`, saglabājot 30 labākos rezultātus. Katram ierakstam ir vārds, punkti, sasniegtais līmenis, grūtība un spēles iznākums. Ja fails ir bojāts vai nav pieejams, spēli joprojām var spēlēt. **Continue saved run** turpina automātiski saglabāto spēli; **New game** sāk no pirmā līmeņa.
+Spēle vienu reizi nosūta rezultātu serverim ar `POST /scores`. Serveris glabā rekordus lokāli `%LOCALAPPDATA%\TowersOfChance\scores.db`, un vietne rāda 30 labākos rezultātus. Katram ierakstam ir vārds, punkti, sasniegtais līmenis, grūtība un spēles iznākums. Ja serveris nav pieejams, spēli joprojām var spēlēt. **Continue saved run** turpina automātiski saglabāto spēli; **New game** sāk no pirmā līmeņa.
 
 ## Projekta uzbūve
 
 - `game/` — spēles noteikumi un modelis.
 - `client/` — Pygame logs, izvēlnes un lokālie rekordi.
-- `web/index.html` — lokālā HTML rekordu tabula; `client/leaderboard.py` to apkalpo.
+- `client/api_client.py` — spēles HTTP savienojums ar serveri.
+- `client/database.py` — SQLite rekordi un spēlētāju statistika.
+- `web/templates/leaderboard.html` — Jinja rekordu tabula.
+- `web/static/` — CSS un spēles noteikumu lapa.
 - `run.bat` — automātiska sagatavošana un palaišana Windows.
 - `run_leaderboard.bat` — rekordu vietne bez spēles palaišanas.
 - `DESIGN.md` — spēles apraksts un ekrāna skice.
@@ -81,4 +118,4 @@ Projekta GitHub repozitorijs: [hubx-x/Tower-of-chance](https://github.com/hubx-x
 
 Virsrakstu fonts: [VT323](https://github.com/google/fonts/tree/main/ofl/vt323), licence `assets/OFL.txt`. Pārējais teksts izmanto Windows iebūvēto Arial fontu, vismaz 20 pikseļu izmērā; tam nav vajadzīgs papildu fonta fails.
 
-Spēlei nav vajadzīgs Pylink, Pylint vai ārējs serveris.
+Spēlei nav vajadzīgs Pylink vai Pylint. Lokālais FastAPI serveris tiek palaists automātiski.

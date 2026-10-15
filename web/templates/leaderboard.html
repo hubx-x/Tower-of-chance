@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Leaderboard · Towers of Chance</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand"><span class="tower" aria-hidden="true">▮</span> TOWERS OF CHANCE</div>
+    <div class="header-links">
+      <nav aria-label="Main navigation"><a href="/" aria-current="page">Leaderboard</a><a href="/static/rules.html">How to play</a></nav>
+      <span class="local">Local leaderboard</span>
+    </div>
+  </header>
+  <section class="intro" aria-labelledby="title">
+    <p class="eyebrow">Hold the line. Climb the ranks.</p>
+    <h1 id="title">Leaderboard</h1>
+    <p>Your best defenses, saved on this computer.</p>
+  </section>
+  <div class="stats" aria-label="Saved score statistics">
+    <div class="stat"><span>BEST SCORE</span><strong id="best">{{ "{:,}".format(scores[0].score) if scores else "—" }}</strong></div>
+    <div class="stat"><span>RUNS ON BOARD</span><strong id="runs">{{ scores | length }}</strong></div>
+    <div class="stat"><span>VICTORIES</span><strong id="wins">{{ scores | selectattr("won") | list | length }}</strong></div>
+  </div>
+  <section class="board" aria-label="Leaderboard scores">
+    <div class="toolbar">
+      <div class="filters" role="group" aria-label="Filter by difficulty">
+        <button type="button" data-filter="all" aria-pressed="true">All</button>
+        <button type="button" data-filter="easy" aria-pressed="false">Easy</button>
+        <button type="button" data-filter="normal" aria-pressed="false">Normal</button>
+        <button type="button" data-filter="hard" aria-pressed="false">Hard</button>
+      </div>
+      <p id="status" role="status" aria-live="polite">Saved scores</p>
+    </div>
+    <div class="scroll" id="results"{% if not scores %} hidden{% endif %}>
+      <table>
+        <caption>Saved runs, ranked by highest score</caption>
+        <thead><tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Difficulty</th><th scope="col">Result</th><th scope="col" class="score">Score</th><th scope="col">Date</th></tr></thead>
+        <tbody id="scores">
+        {% for score in scores %}
+          <tr>
+            <td class="rank">{{ "%02d" | format(loop.index) }}</td>
+            <td class="name">{{ score.name }}</td>
+            <td><span class="badge">{{ score.difficulty | title }}</span></td>
+            <td{% if score.won %} class="win"{% endif %} title="Reached level {{ score.level }} of 3">{{ "Victory" if score.won else "Defeat" }}</td>
+            <td class="score">{{ "{:,}".format(score.score) }}</td>
+            <td class="date" title="{{ score.date }}">{{ score.date[:10] }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="empty" id="empty"{% if scores %} hidden{% endif %}><strong id="empty-title">Your first defense starts here</strong><p id="empty-detail">Finish a game and your score will appear here automatically.</p></div>
+  </section>
+  <footer><span>The top 30 completed runs are shown. Finish a game to add a score.</span><span>Refreshes automatically every 5 seconds</span></footer>
+  <noscript><p>Saved scores are shown above. Enable JavaScript for difficulty filters and automatic updates.</p></noscript>
+</main>
+<script id="initial-scores" type="application/json">{{ scores | tojson }}</script>
+<script>
+  "use strict";
+  let scores = JSON.parse(document.getElementById("initial-scores").textContent);
+  let difficulty = "all";
+  const number = new Intl.NumberFormat();
+  const labels = {easy:"Easy", normal:"Normal", hard:"Hard"};
+  const byId = id => document.getElementById(id);
+
+  function cell(row, value, className) {
+    const item = document.createElement("td");
+    item.textContent = value;
+    if (className) item.className = className;
+    row.appendChild(item);
+    return item;
+  }
+
+  function render() {
+    const filtered = scores.filter(score => difficulty === "all" || score.difficulty === difficulty);
+    byId("best").textContent = scores.length ? number.format(scores[0].score) : "—";
+    byId("runs").textContent = number.format(scores.length);
+    byId("wins").textContent = number.format(scores.filter(score => score.won).length);
+    const body = byId("scores");
+    body.replaceChildren();
+    filtered.forEach((score, index) => {
+      const row = document.createElement("tr");
+      cell(row, String(index + 1).padStart(2, "0"), "rank");
+      cell(row, score.name, "name");
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = labels[score.difficulty] || score.difficulty;
+      cell(row, "").appendChild(badge);
+      const result = cell(row, score.won ? "Victory" : "Defeat", score.won ? "win" : "");
+      result.title = "Reached level " + score.level + " of 3";
+      cell(row, number.format(score.score), "score");
+      const date = new Date(score.date);
+      const dateCell = cell(row, Number.isNaN(date.valueOf()) ? "—" : date.toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"}), "date");
+      if (!Number.isNaN(date.valueOf())) dateCell.title = date.toLocaleString();
+      body.appendChild(row);
+    });
+    byId("results").hidden = filtered.length === 0;
+    byId("empty").hidden = filtered.length > 0;
+    byId("empty-title").textContent = scores.length ? "No runs at this difficulty yet" : "Your first defense starts here";
+    byId("empty-detail").textContent = scores.length ? "Try another difficulty or finish a new game." : "Finish a game and your score will appear here automatically.";
+  }
+
+  async function refresh() {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    try {
+      const response = await fetch("/api/scores", {cache:"no-store", signal:controller.signal});
+      if (!response.ok) throw new Error("Scores unavailable");
+      const data = await response.json();
+      if (!Array.isArray(data.scores)) throw new Error("Invalid scores");
+      scores = data.scores.slice().sort((a, b) => b.score - a.score);
+      render();
+      byId("status").textContent = "Updated " + new Date().toLocaleTimeString(undefined, {hour:"2-digit", minute:"2-digit"});
+      byId("status").classList.remove("error");
+    } catch (error) {
+      byId("status").textContent = "Connection lost · retrying…";
+      byId("status").classList.add("error");
+    } finally {
+      clearTimeout(timeout);
+      setTimeout(refresh, 5000);
+    }
+  }
+
+  document.querySelectorAll("[data-filter]").forEach(button => {
+    button.addEventListener("click", () => {
+      difficulty = button.dataset.filter;
+      document.querySelectorAll("[data-filter]").forEach(item => item.setAttribute("aria-pressed", String(item === button)));
+      render();
+    });
+  });
+  refresh();
+</script>
+</body>
+</html>
