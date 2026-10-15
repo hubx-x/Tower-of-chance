@@ -1,12 +1,15 @@
 import math
 import os
 from pathlib import Path
+import webbrowser
 
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 import pygame
 
 from client.scores import load_scores, save_score
+from client.progress import clear_progress, load_progress, save_progress
+from client.leaderboard import start_server
 from client.art import TowerArt
 from client.effects import draw_projectile, draw_impact, draw_status
 from game.model import Game, MAPS, ROAD_WIDTH, TOWER_TYPES
@@ -25,6 +28,7 @@ PATH_COLORS = {None: GOLD, "damage": RED, "speed": GREEN, "range": (127, 174, 23
 TOWER_COLORS = {"basic": GOLD, "ice": (128, 213, 240), "fire": RED, "machine": GREEN}
 # --- Vilnu pauze ---
 AUTO_DELAY = 3.0
+AUTOSAVE_DELAY = 2.0
 NAME_BOX = pygame.Rect(90, 273, 430, 48)
 MAP_DESCRIPTIONS = {
     "meadow": "A winding trail through green fields.",
@@ -67,6 +71,21 @@ class App:
         self.fx_time = 0
         self.saved = False
         self.save_ok = True
+        self.progress_ok = True
+        self.autosave_timer = 0
+        self.run_name = ""
+        self.checkpoint = load_progress()
+        if self.checkpoint:
+            self.name = self.checkpoint["name"]
+            self.difficulty = self.checkpoint["game"].difficulty
+            self.map_name = self.checkpoint["game"].map_name
+            self.auto_wave = self.checkpoint["auto_wave"]
+        self.leaderboard_server = None
+        self.notice = ""
+        try:
+            self.leaderboard_server = start_server()
+        except OSError:
+            self.notice = "Leaderboard could not start. Try opening it again."
         self.scores = load_scores()
         self.buttons = []
         self.mouse = (0, 0)
@@ -118,6 +137,7 @@ class App:
 
     def start_game(self):
         self.name = " ".join(self.name.split()) or "Player"
+        self.run_name = self.name
         self.game = Game(self.difficulty, map_name=self.map_name)
         self.page = "game"
         self.selected = None
@@ -129,10 +149,50 @@ class App:
         self.fx_time = 0
         self.saved = False
         self.typing = False
+        self.checkpoint_progress()
+
+    def continue_game(self):
+        if not self.checkpoint:
+            return
+        self.name = self.run_name = self.checkpoint["name"]
+        self.game = self.checkpoint["game"]
+        self.difficulty = self.game.difficulty
+        self.map_name = self.game.map_name
+        self.auto_wave = self.checkpoint["auto_wave"]
+        self.page = "game"
+        self.paused = True
+        self.typing = False
+        self.saved = False
+        self.save_ok = True
+        self.auto_timer = AUTO_DELAY
+        self.autosave_timer = 0
+        self.fx_time = 0
+        self.cancel()
+
+    def checkpoint_progress(self):
+        if self.game is None or self.game.state not in ("build", "wave", "choice"):
+            return
+        self.progress_ok = save_progress(self.run_name, self.game, self.auto_wave)
+        if self.progress_ok:
+            self.checkpoint = {"name": self.run_name, "game": self.game,
+                               "auto_wave": self.auto_wave}
+        self.autosave_timer = 0
+
+    def open_leaderboard(self):
+        try:
+            if self.leaderboard_server is None:
+                self.leaderboard_server = start_server()
+            if not webbrowser.open(self.leaderboard_server.url):
+                self.notice = f"Open {self.leaderboard_server.url} in your browser."
+        except (OSError, webbrowser.Error):
+            self.notice = "Could not open the leaderboard. Try run_leaderboard.bat."
 
     def menu(self):
+        if self.page == "game":
+            self.checkpoint_progress()
         self.page = "menu"
         self.paused = False
+        self.typing = False
         self.scores = load_scores()
 
     def set_difficulty(self, value):
@@ -151,6 +211,8 @@ class App:
     def toggle_auto(self):
         self.auto_wave = not self.auto_wave
         self.auto_timer = AUTO_DELAY
+        if self.page == "game":
+            self.checkpoint_progress()
 
     def sell_selected(self):
         if self.game.sell_tower(self.selected):
@@ -161,11 +223,13 @@ class App:
             self.auto_timer = AUTO_DELAY
             self.building = False
             self.merging = False
+            self.checkpoint_progress()
 
     def choose_effect(self, index):
         self.game.choose_effect(index)
         self.auto_timer = AUTO_DELAY
         self.cancel()
+        self.checkpoint_progress()
 
     def show_page(self, page):
         self.page = page
@@ -182,6 +246,7 @@ class App:
             self.mouse = (int(event.pos[0] * SIZE[0] / w), int(event.pos[1] * SIZE[1] / h))
             self.draw()
         if event.type == pygame.QUIT:
+            self.checkpoint_progress()
             self.running = False
         elif event.type == pygame.TEXTINPUT and self.typing and self.page == "menu":
             self.name = (self.name + "".join(c for c in event.text if c.isprintable()))[:24]
@@ -302,7 +367,11 @@ class App:
             self.button((90 + i * 147, 456, 136, 44), info["name"],
                         lambda m=key: self.set_map(m), self.map_name == key)
         self.text(MAP_DESCRIPTIONS[self.map_name], (90, 517), 18, MUTED)
-        self.button((90, 565, 430, 50), "PLAY  /  ENTER", self.start_game, True)
+        if self.checkpoint:
+            self.button((90, 565, 209, 50), "Continue saved run", self.continue_game, True)
+            self.button((311, 565, 209, 50), "New game / ENTER", self.start_game)
+        else:
+            self.button((90, 565, 430, 50), "PLAY  /  ENTER", self.start_game, True)
         self.button((90, 629, 209, 43), "Records", lambda: self.show_page("records"))
         self.button((311, 629, 209, 43), "How to play", lambda: self.show_page("help"))
         self.text("3 levels  /  9 waves  /  4 tower types", (90, 687), 16, MUTED)
@@ -316,6 +385,9 @@ class App:
         self.text(f"Personal best: {best}", (735, 548), 20, GREEN)
         self.button((735, 610, 355, 43), f"Auto wave: {'ON' if self.auto_wave else 'OFF'}",
                     self.toggle_auto, self.auto_wave, color=GREEN)
+        self.button((735, 666, 355, 43), "Leaderboard website", self.open_leaderboard)
+        if self.notice:
+            self.wrapped(self.notice, (735, 720), 355, 18, GOLD)
 
     def draw_game(self):
         game = self.game
@@ -369,6 +441,8 @@ class App:
         self.screen.set_clip(None)
         self.draw_sidebar()
         self.wrapped(game.message, (25, 725), 820, 18)
+        self.text("Autosave on" if self.progress_ok else "Save failed. Check folder permissions.",
+                  (25, 753), 16, MUTED if self.progress_ok else RED)
         if game.state == "choice":
             self.draw_choices()
         elif game.state in ("win", "lose"):
@@ -504,6 +578,7 @@ class App:
         if not records:
             self.text("Finish a game to set the first record.", (90, 301), 20, MUTED)
         self.button((90, 692, 240, 45), "Back to menu", self.menu)
+        self.button((350, 692, 280, 45), "Leaderboard website", self.open_leaderboard)
 
     def draw_help(self):
         self.text("HOW TO PLAY", (90, 55), 36, GOLD)
@@ -554,22 +629,35 @@ class App:
         else:
             self.auto_timer = AUTO_DELAY
         if self.game.state in ("win", "lose") and not self.saved:
-            self.save_ok = save_score(self.name, self.game.score, self.game.level,
+            self.save_ok = save_score(self.run_name, self.game.score, self.game.level,
                                       self.game.difficulty, self.game.state == "win")
             self.saved = True
             self.scores = load_scores()
+            self.progress_ok = clear_progress()
+            self.checkpoint = None
+        elif self.game.state in ("build", "wave", "choice"):
+            self.autosave_timer += dt
+            if previous != self.game.state or self.autosave_timer >= AUTOSAVE_DELAY:
+                self.checkpoint_progress()
 
     def run(self):
-        while self.running:
-            dt = self.clock.tick(60) / 1000
-            x, y = pygame.mouse.get_pos()
-            w, h = self.window.get_size()
-            self.mouse = (int(x * SIZE[0] / w), int(y * SIZE[1] / h))
-            for event in pygame.event.get():
-                self.handle(event)
-            self.update(dt)
-            self.draw()
-        pygame.quit()
+        try:
+            while self.running:
+                dt = self.clock.tick(60) / 1000
+                x, y = pygame.mouse.get_pos()
+                w, h = self.window.get_size()
+                self.mouse = (int(x * SIZE[0] / w), int(y * SIZE[1] / h))
+                for event in pygame.event.get():
+                    self.handle(event)
+                if self.running:
+                    self.update(dt)
+                    self.draw()
+        finally:
+            self.checkpoint_progress()
+            if self.leaderboard_server is not None:
+                self.leaderboard_server.shutdown()
+                self.leaderboard_server.server_close()
+            pygame.quit()
 
 
 if __name__ == "__main__":

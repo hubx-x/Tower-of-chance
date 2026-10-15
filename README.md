@@ -1,5 +1,17 @@
 # Towers of Chance
 
+## Save progress and local leaderboard
+
+Double-click **run.bat** to play. The game automatically saves your current run every 2 seconds, when a wave changes, and when you return to the menu or close the window. Choose **Continue saved run** to resume with your towers, upgrades, coins, lives, chance cards, and current wave restored. A continued game starts paused; press **P** to play.
+
+There is one saved run on this computer. **New game / Enter** starts a fresh run and replaces it. Finishing a game clears that run and adds its result to the high scores.
+
+Click **Leaderboard website** in the game to open the HTML leaderboard, normally at **http://127.0.0.1:8765/**. It shows your saved high scores, lets you filter by difficulty, and refreshes every 5 seconds. If that port is busy, the game uses another available local port. The website stays available while the game is running.
+
+To open the leaderboard without the game, double-click **run_leaderboard.bat**. Keep its window open while using the website; press **Ctrl+C** to stop it. Both launchers use the same local records. No account, database, or extra web packages are needed.
+
+Progress and high scores live in `%LOCALAPPDATA%\TowersOfChance\progress.json` and `scores.json`. The website shows completed runs saved on this computer. Python 3.10+ and Pygame are the only game requirements; `run.bat` installs Pygame on first launch.
+
 Vienkārša 2D torņu aizsardzības spēle Python un Pygame ar pikseļu izskatu. Izvēlies spēlētāja vārdu, grūtību (**Easy**, **Normal** vai **Hard**) un karti (**Meadow**, **Desert** vai **Tundra**). Aizsargā bāzi un pārvari visus 9 viļņus.
 
 ## Palaišana Windows un VS Code
@@ -52,13 +64,15 @@ Easy un Normal piedāvā trīs nejaušas efekta kartītes pēc kopējā 1., 4. u
 
 Par uzvarētu ienaidnieku saņem 10 punktus, par pabeigtu vilni 50 un par pabeigtu līmeni 100. Punkti un monētas ir atsevišķi. Pēc uzvaras vai zaudējuma parādās rezultāta ekrāns; galvenajā izvēlnē pieejama rekordu tabula.
 
-Rekordi tiek saglabāti lokāli `%LOCALAPPDATA%\TowersOfChance\scores.json`, saglabājot 30 labākos rezultātus. Katram ierakstam ir vārds, punkti, sasniegtais līmenis, grūtība un spēles iznākums. Ja fails ir bojāts vai nav pieejams, spēli joprojām var spēlēt. Jauna spēle vienmēr sākas no pirmā līmeņa.
+Rekordi tiek saglabāti lokāli `%LOCALAPPDATA%\TowersOfChance\scores.json`, saglabājot 30 labākos rezultātus. Katram ierakstam ir vārds, punkti, sasniegtais līmenis, grūtība un spēles iznākums. Ja fails ir bojāts vai nav pieejams, spēli joprojām var spēlēt. **Continue saved run** turpina automātiski saglabāto spēli; **New game** sāk no pirmā līmeņa.
 
 ## Projekta uzbūve
 
 - `game/` — spēles noteikumi un modelis.
 - `client/` — Pygame logs, izvēlnes un lokālie rekordi.
+- `web/index.html` — lokālā HTML rekordu tabula; `client/leaderboard.py` to apkalpo.
 - `run.bat` — automātiska sagatavošana un palaišana Windows.
+- `run_leaderboard.bat` — rekordu vietne bez spēles palaišanas.
 - `DESIGN.md` — spēles apraksts un ekrāna skice.
 
 Krāsas var mainīt pie `# --- Krasa ---`, automātisko viļņu pauzi — pie `# --- Vilnu pauze ---` failā `client/main.py`. Torņu cenas un spēles noteikumi atrodas `game/model.py`.

@@ -22,7 +22,13 @@ echo Installing Pygame...
 if errorlevel 1 goto setup_error
 
 :play
+if /i "%~1" == "--leaderboard" goto leaderboard
 ".venv\Scripts\python.exe" -m client.main
+if errorlevel 1 goto game_error
+exit /b 0
+
+:leaderboard
+".venv\Scripts\python.exe" -m client.leaderboard --open
 if errorlevel 1 goto game_error
 exit /b 0
 
